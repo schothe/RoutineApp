@@ -68,11 +68,6 @@ h1{font-size:24px;margin:0}h2{font-size:22px;margin:0}
 <div id="app"></div>
 <div id="fx"></div>
 <script>
-window.onerror = function(msg, url, line) {
-  const el = document.getElementById('app');
-  if(el) el.innerHTML = '<div style="padding:20px;color:red;font-size:18px;background:#fff;border-radius:10px;margin:20px;"><b>Fehler:</b><br>' + msg + '<br>Zeile: ' + line + '</div>';
-};
-
 const AVATARS=['🐶','🐱','🐰','🦊','🐼','🦁','🐸','🐵','🦄','🐯'];
 const ICONS=['🚽','👕','🪥','🍎','🎒','🚰','👟','📦','🛏️','🦷','📖','🧸','🧼','🍽️','🥣','🥛','🧦','🧥','🚿','🛁','🧹','🗑️','🎨','🌱','🐕'];
 const PARTS=['🌅','☀️','🌙'];
@@ -125,6 +120,15 @@ function saveLocal(){try{localStorage.setItem('routine',JSON.stringify(S));}catc
 
 function checkDay(){
   if(S.day!==today()){
+    const y=S.day;
+    const cs=S.cards;
+    // Gestern ins Archiv (hist) eintragen
+    if(!S.hist[y])S.hist[y]={};
+    S.kids.forEach(k=>{
+      const kcs=cs.filter(c=>(!c.kid||c.kid===k.id)&&(!c.ages.length||c.ages.includes(k.age)));
+      const n=kcs.filter(c=>S.done.includes(k.id+'|'+c.id)).length;
+      S.hist[y][k.id]={n,all:kcs.length>0&&n===kcs.length};
+    });
     S.day=today();S.done=[];
     const cut=ymd(new Date(Date.now()-70*864e5));
     Object.keys(S.hist).forEach(k=>{if(k<cut)delete S.hist[k];});
@@ -149,6 +153,7 @@ function daysText(days){
   return n.map(d=>DN[d]).join('/');
 }
 
+// ---------- Wochen-Belohnung ----------
 function weekDates(){
   const d=new Date(),off=(d.getDay()+6)%7;
   const m=new Date(d.getFullYear(),d.getMonth(),d.getDate()-off);
@@ -173,6 +178,7 @@ const weekPerfect=k=>weekStatus(k).filter(s=>s==='perfect').length;
 let view={name:'home'},modal=null,justDone=null;
 const $app=document.getElementById('app');
 
+// ---------- Ton, Sprache, Vibration, Sterne ----------
 let ac;
 function chime(){
   try{
@@ -207,6 +213,7 @@ function burst(n){
   }
 }
 
+// ---------- Ansichten ----------
 function homeHTML(){
   return `<div class="screen home"><button class="lock" data-act="gate">🔒</button><div class="grid">`+
     S.kids.map((k,i)=>{
@@ -284,13 +291,14 @@ function syncModal(){
   const c=document.getElementById('cu');if(c)modal.cu=c.value;
 }
 
+// ---------- Aktionen ----------
 $app.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t)return;
   act(t.dataset.act,t.dataset.v!==undefined?t.dataset.v:t.dataset.id);
 });
 function toggle(arr,n){const i=arr.indexOf(n);if(i>=0)arr.splice(i,1);else{arr.push(n);arr.sort();}}
 
-async function act(a,v){
+function act(a,v){
   syncModal();
   switch(a){
     case 'kid':view={name:'day',kid:v};break;
@@ -353,7 +361,7 @@ async function act(a,v){
       break;
     }
     case 'delCard':{
-      const c=S.cards.cards.find?.(x=>x.id===v) || S.cards.find(x=>x.id===v);
+      const c=S.cards.find(x=>x.id===v);
       if(confirm('„'+(c?c.name:'Karte')+'“ löschen?')){
         S.cards=S.cards.filter(x=>x.id!==v);
         S.done=S.done.filter(x=>!x.endsWith('|'+v));
