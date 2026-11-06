@@ -1,0 +1,13 @@
+{
+  "name": "Meine Routine",
+  "short_name": "Routine",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fff4d6",
+  "theme_color": "#ff9800",
+  "lang": "de",
+  "icons": [
+    {"src": "icon.svg", "sizes": "any", "type": "image/svg+xml"}
+  ]
+}
