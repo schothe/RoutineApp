@@ -10,6 +10,8 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <meta name="theme-color" content="#ff9800">
+<!-- Supabase SDK laden -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;font-family:-apple-system,system-ui,Roboto,sans-serif;user-select:none;-webkit-user-select:none;touch-action:manipulation}
@@ -65,15 +67,64 @@ h1{font-size:24px;margin:0}h2{font-size:22px;margin:0}
 </style>
 </head>
 <body>
-<div id="app"></div>
+<div id="app"><div style="text-align:center;margin-top:100px;font-size:24px">Lade Daten aus der Cloud... 🚀</div></div>
 <div id="fx"></div>
 <script>
+// ---------- Supabase Verbindung ----------
+const SUPABASE_URL = 'https://ggnkegcsmfikuxjyddcy.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_xoUpfy-H8iqX1uDPYVL7PQ_zRvd8J0f';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 const AVATARS=['🐶','🐱','🐰','🦊','🐼','🦁','🐸','🐵','🦄','🐯'];
 const ICONS=['🚽','👕','🪥','🍎','🎒','🚰','👟','📦','🛏️','🦷','📖','🧸','🧼','🍽️','🥣','🥛','🧦','🧥','🚿','🛁','🧹','🗑️','🎨','🌱','🐕'];
 const PARTS=['🌅','☀️','🌙'];
 const COLORS=['#ef5350','#26a69a','#ffb300','#7e57c2','#ec407a','#42a5f5'];
-const DN=['So','Mo','Di','Mi','Do','Fr','Sa'];          // Index = getDay()
-const ORDER=[1,2,3,4,5,6,0];                              // Woche beginnt Montag
+const DN=['So','Mo','Di','Mi','Do','Fr','Sa'];
+const ORDER=[1,2,3,4,5,6,0];
+
+let S = {
+  kids: [],
+  cards: [],
+  done: [],
+  day: today(),
+  speak: true,
+  goal: 5,
+  hist: {}
+};
+
+function today(){const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
+function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+
+// ---------- Daten aus Supabase laden ----------
+async function loadFromCloud(){
+  try {
+    const { data: kidsData } = await supabase.from('kids').select('*');
+    const { data: cardsData } = await supabase.from('tasks').select('*');
+    const { data: statusData } = await supabase.from('daily_status').select('*').eq('date', today());
+
+    if(kidsData && kidsData.length > 0) S.kids = kidsData;
+    if(cardsData && cardsData.length > 0) {
+      S.cards = cardsData.map(c => ({
+        ...c,
+        ages: c.ages || [],
+        days: c.days || []
+      }));
+    }
+
+    // Wenn Datenbank komplett leer ist, Standarddaten anlegen
+    if((!kidsData || kidsData.length === 0) && (!cardsData || cardsData.length === 0)){
+      S = defaults();
+      await saveToCloudFull();
+    } else {
+      if(statusData) {
+        S.done = statusData.filter(s => s.done).map(s => s.kid_id + '|' + s.task_id);
+      }
+    }
+  } catch(e) {
+    console.error('Fehler beim Laden, nutze Fallback', e);
+  }
+  render();
+}
 
 function defaults(){
   return {
@@ -98,30 +149,12 @@ function defaults(){
     done:[],day:today(),speak:true,goal:5,hist:{}
   };
 }
-function today(){const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
-function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-function load(){
-  let s=null;
-  try{s=JSON.parse(localStorage.getItem('routine'));}catch(e){}
-  if(!(s&&s.kids&&s.cards))s=defaults();
-  s.cards.forEach(c=>{if(!c.ages)c.ages=[];if(!c.days)c.days=[];});
-  if(!s.hist)s.hist={};
-  if(!s.goal)s.goal=5;
-  if(s.speak===undefined)s.speak=true;
-  if(!s.done)s.done=[];
-  if(!s.day)s.day=today();
-  return s;
+
+async function saveToCloudFull(){
+  for(let k of S.kids) await supabase.from('kids').upsert(k);
+  for(let c of S.cards) await supabase.from('tasks').upsert(c);
 }
-let S=load();
-function save(){try{localStorage.setItem('routine',JSON.stringify(S));}catch(e){}}
-function checkDay(){
-  if(S.day!==today()){
-    S.day=today();S.done=[];
-    const cut=ymd(new Date(Date.now()-70*864e5));
-    Object.keys(S.hist).forEach(k=>{if(k<cut)delete S.hist[k];});
-    save();
-  }
-}
+
 const uid=()=>Math.random().toString(36).slice(2,9);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const key=(k,c)=>k.id+'|'+c.id;
@@ -268,23 +301,23 @@ function modalHTML(){
   <div class="acts"><button class="btn" data-act="mcancel">Abbrechen</button><button class="btn pri" data-act="msave">Speichern</button></div></div></div>`;
 }
 function render(){
-  checkDay();
   $app.innerHTML=(view.name==='home'?homeHTML():view.name==='day'?dayHTML():parentHTML())+(modal?modalHTML():'');
 }
-function sync(){
+function syncModal(){
   if(!modal||!modal.d)return;
   const n=document.getElementById('nm');if(n)modal.d.name=n.value;
   const c=document.getElementById('cu');if(c)modal.cu=c.value;
 }
 
-// ---------- Aktionen ----------
+// ---------- Aktionen mit Supabase-Anbindung ----------
 $app.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t)return;
   act(t.dataset.act,t.dataset.v!==undefined?t.dataset.v:t.dataset.id);
 });
 function toggle(arr,n){const i=arr.indexOf(n);if(i>=0)arr.splice(i,1);else{arr.push(n);arr.sort();}}
-function act(a,v){
-  sync();
+
+async function act(a,v){
+  syncModal();
   switch(a){
     case 'kid':view={name:'day',kid:v};break;
     case 'home':view={name:'home'};break;
@@ -297,12 +330,20 @@ function act(a,v){
     case 'mcancel':modal=null;break;
     case 'tile':{
       const k=S.kids.find(x=>x.id===view.kid),c=S.cards.find(x=>x.id===v);
-      const kk=key(k,c);if(S.done.includes(kk))return;   // erledigt bleibt erledigt
+      const kk=key(k,c);if(S.done.includes(kk))return;
       S.done.push(kk);
+      
+      // In Supabase speichern
+      await supabase.from('daily_status').upsert({
+        id: ymd(new Date()) + '_' + k.id + '_' + c.id,
+        date: ymd(new Date()),
+        kid_id: k.id,
+        task_id: c.id,
+        done: true
+      });
+
       const cs=cardsFor(k),nn=cs.filter(x=>S.done.includes(key(k,x))).length,all=nn===cs.length;
-      const y=ymd(new Date());
-      (S.hist[y]=S.hist[y]||{})[k.id]={n:nn,t:cs.length,all:all};
-      save();justDone=v;chime();buzz();
+      justDone=v;chime();buzz();
       const wp=weekPerfect(k);
       render();burst(all?70:24);
       if(all&&wp===S.goal){
@@ -328,12 +369,14 @@ function act(a,v){
       if(modal.type==='kid'){
         d.name=d.name.trim()||'Kind';
         if(d.id){S.kids[S.kids.findIndex(x=>x.id===d.id)]=d;}else{d.id=uid();S.kids.push(d);}
+        await supabase.from('kids').upsert(d);
       }else{
         d.name=d.name.trim()||'Aufgabe';
         if((modal.cu||'').trim())d.icon=modal.cu.trim();
         if(d.id){S.cards[S.cards.findIndex(x=>x.id===d.id)]=d;}else{d.id=uid();S.cards.push(d);}
+        await supabase.from('tasks').upsert(d);
       }
-      save();modal=null;break;
+      modal=null;break;
     }
     case 'delKid':{
       const k=S.kids.find(x=>x.id===v);
@@ -341,8 +384,8 @@ function act(a,v){
         S.kids=S.kids.filter(x=>x.id!==v);
         S.cards=S.cards.filter(c=>c.kid!==v);
         S.done=S.done.filter(x=>!x.startsWith(v+'|'));
-        Object.keys(S.hist).forEach(d=>{delete S.hist[d][v];});
-        save();
+        await supabase.from('kids').delete().eq('id', v);
+        await supabase.from('tasks').delete().eq('kid', v);
       }
       break;
     }
@@ -351,36 +394,35 @@ function act(a,v){
       if(confirm('„'+(c?c.name:'Karte')+'“ löschen?')){
         S.cards=S.cards.filter(x=>x.id!==v);
         S.done=S.done.filter(x=>!x.endsWith('|'+v));
-        save();
+        await supabase.from('tasks').delete().eq('id', v);
       }
       break;
     }
-    case 'reset':if(confirm('Heute alles zurücksetzen?')){S.done=[];delete S.hist[ymd(new Date())];save();}break;
-    case 'toggleSpeak':S.speak=!S.speak;save();break;
-    case 'setGoal':S.goal=+v;save();break;
+    case 'reset':
+      if(confirm('Heute alles zurücksetzen?')){
+        S.done=[];
+        for(let k of S.kids) {
+          for(let c of cardsFor(k)) {
+            await supabase.from('daily_status').delete().eq('date', today()).eq('kid_id', k.id).eq('task_id', c.id);
+          }
+        }
+      }
+      break;
+    case 'toggleSpeak':S.speak=!S.speak;break;
+    case 'setGoal':S.goal=+v;break;
   }
   render();
 }
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)render();});
-setInterval(()=>{if(S.day!==today())render();},60000);
-render();
 
-// Offline-Modus
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});
-}
-// App-Icon für den Home-Bildschirm (iOS braucht PNG, das wird hier erzeugt)
-(function(){
-  const img=new Image();
-  img.onload=()=>{try{
-    const c=document.createElement('canvas');c.width=c.height=180;
-    c.getContext('2d').drawImage(img,0,0,180,180);
-    const l=document.createElement('link');
-    l.rel='apple-touch-icon';l.href=c.toDataURL('image/png');
-    document.head.appendChild(l);
-  }catch(e){}};
-  img.src='icon.svg';
-})();
+// Beim Start Daten aus Supabase laden
+loadFromCloud();
+
+// Optional: Echtzeit-Lauschen auf Änderungen von anderen Geräten
+supabase.channel('public:daily_status')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_status' }, payload => {
+    loadFromCloud();
+  })
+  .subscribe();
 </script>
 </body>
 </html>
