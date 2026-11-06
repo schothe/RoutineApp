@@ -10,8 +10,6 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <meta name="theme-color" content="#ff9800">
-<!-- Supabase SDK laden -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;font-family:-apple-system,system-ui,Roboto,sans-serif;user-select:none;-webkit-user-select:none;touch-action:manipulation}
@@ -70,21 +68,10 @@ h1{font-size:24px;margin:0}h2{font-size:22px;margin:0}
 <div id="app"></div>
 <div id="fx"></div>
 <script>
-// Fehlerfänger fürs iPad (zeigt Fehler sofort rot an)
 window.onerror = function(msg, url, line) {
   const el = document.getElementById('app');
-  if(el) el.innerHTML = '<div style="padding:20px;color:red;font-size:18px;background:#fff;border-radius:10px;margin:20px;"><b>JavaScript-Fehler:</b><br>' + msg + '<br>Zeile: ' + line + '</div>';
+  if(el) el.innerHTML = '<div style="padding:20px;color:red;font-size:18px;background:#fff;border-radius:10px;margin:20px;"><b>Fehler:</b><br>' + msg + '<br>Zeile: ' + line + '</div>';
 };
-
-// ---------- Supabase Verbindung ----------
-const SUPABASE_URL = 'https://ggnkegcsmfikuxjyddcy.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_xoUpfy-H8iqX1uDPYVL7PQ_zRvd8J0f';
-let supabase = null;
-try {
-  if(window.supabase && typeof window.supabase.createClient === 'function') {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-  }
-} catch(e) {}
 
 const AVATARS=['🐶','🐱','🐰','🦊','🐼','🦁','🐸','🐵','🦄','🐯'];
 const ICONS=['🚽','👕','🪥','🍎','🎒','🚰','👟','📦','🛏️','🦷','📖','🧸','🧼','🍽️','🥣','🥛','🧦','🧥','🚿','🛁','🧹','🗑️','🎨','🌱','🐕'];
@@ -136,31 +123,6 @@ function loadLocal(){
 let S = loadLocal();
 function saveLocal(){try{localStorage.setItem('routine',JSON.stringify(S));}catch(e){}}
 
-async function syncFromCloud(){
-  if(!supabase) return;
-  try {
-    const { data: kidsData } = await supabase.from('kids').select('*');
-    const { data: cardsData } = await supabase.from('tasks').select('*');
-    const { data: statusData } = await supabase.from('daily_status').select('*').eq('date', today());
-
-    if(kidsData && kidsData.length > 0) S.kids = kidsData;
-    if(cardsData && cardsData.length > 0) {
-      S.cards = cardsData.map(c => ({
-        ...c,
-        ages: c.ages || [],
-        days: c.days || []
-      }));
-    }
-    if(statusData) {
-      S.done = statusData.filter(s => s.done).map(s => s.kid_id + '|' + s.task_id);
-    }
-    saveLocal();
-    render();
-  } catch(e) {
-    console.error('Cloud-Sync Fehler:', e);
-  }
-}
-
 function checkDay(){
   if(S.day!==today()){
     S.day=today();S.done=[];
@@ -187,7 +149,6 @@ function daysText(days){
   return n.map(d=>DN[d]).join('/');
 }
 
-// ---------- Wochen-Belohnung ----------
 function weekDates(){
   const d=new Date(),off=(d.getDay()+6)%7;
   const m=new Date(d.getFullYear(),d.getMonth(),d.getDate()-off);
@@ -212,7 +173,6 @@ const weekPerfect=k=>weekStatus(k).filter(s=>s==='perfect').length;
 let view={name:'home'},modal=null,justDone=null;
 const $app=document.getElementById('app');
 
-// ---------- Ton, Sprache, Vibration, Sterne ----------
 let ac;
 function chime(){
   try{
@@ -247,7 +207,6 @@ function burst(n){
   }
 }
 
-// ---------- Ansichten ----------
 function homeHTML(){
   return `<div class="screen home"><button class="lock" data-act="gate">🔒</button><div class="grid">`+
     S.kids.map((k,i)=>{
@@ -325,7 +284,6 @@ function syncModal(){
   const c=document.getElementById('cu');if(c)modal.cu=c.value;
 }
 
-// ---------- Aktionen ----------
 $app.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t)return;
   act(t.dataset.act,t.dataset.v!==undefined?t.dataset.v:t.dataset.id);
@@ -349,16 +307,6 @@ async function act(a,v){
       const kk=key(k,c);if(S.done.includes(kk))return;
       S.done.push(kk);
       saveLocal();
-
-      if(supabase){
-        supabase.from('daily_status').upsert({
-          id: ymd(new Date()) + '_' + k.id + '_' + c.id,
-          date: ymd(new Date()),
-          kid_id: k.id,
-          task_id: c.id,
-          done: true
-        }).then();
-      }
 
       const cs=cardsFor(k),nn=cs.filter(x=>S.done.includes(key(k,x))).length,all=nn===cs.length;
       justDone=v;chime();buzz();
@@ -387,12 +335,10 @@ async function act(a,v){
       if(modal.type==='kid'){
         d.name=d.name.trim()||'Kind';
         if(d.id){S.kids[S.kids.findIndex(x=>x.id===d.id)]=d;}else{d.id=uid();S.kids.push(d);}
-        if(supabase) supabase.from('kids').upsert(d).then();
       }else{
         d.name=d.name.trim()||'Aufgabe';
         if((modal.cu||'').trim())d.icon=modal.cu.trim();
         if(d.id){S.cards[S.cards.findIndex(x=>x.id===d.id)]=d;}else{d.id=uid();S.cards.push(d);}
-        if(supabase) supabase.from('tasks').upsert(d).then();
       }
       saveLocal();modal=null;break;
     }
@@ -403,20 +349,15 @@ async function act(a,v){
         S.cards=S.cards.filter(c=>c.kid!==v);
         S.done=S.done.filter(x=>!x.startsWith(v+'|'));
         saveLocal();
-        if(supabase){
-          supabase.from('kids').delete().eq('id', v).then();
-          supabase.from('tasks').delete().eq('kid', v).then();
-        }
       }
       break;
     }
     case 'delCard':{
-      const c=S.cards.find(x=>x.id===v);
+      const c=S.cards.cards.find?.(x=>x.id===v) || S.cards.find(x=>x.id===v);
       if(confirm('„'+(c?c.name:'Karte')+'“ löschen?')){
         S.cards=S.cards.filter(x=>x.id!==v);
         S.done=S.done.filter(x=>!x.endsWith('|'+v));
         saveLocal();
-        if(supabase) supabase.from('tasks').delete().eq('id', v).then();
       }
       break;
     }
@@ -424,13 +365,6 @@ async function act(a,v){
       if(confirm('Heute alles zurücksetzen?')){
         S.done=[];delete S.hist[ymd(new Date())];
         saveLocal();
-        if(supabase){
-          for(let k of S.kids) {
-            for(let c of cardsFor(k)) {
-              supabase.from('daily_status').delete().eq('date', today()).eq('kid_id', k.id).eq('task_id', c.id).then();
-            }
-          }
-        }
       }
       break;
     case 'toggleSpeak':S.speak=!S.speak;saveLocal();break;
@@ -439,41 +373,7 @@ async function act(a,v){
   render();
 }
 
-document.addEventListener('visibilitychange',()=>{if(!document.hidden){syncFromCloud();render();}});
-setInterval(()=>{if(S.day!==today())render();},60000);
-
-// Direkt beim Start rendern
 render();
-
-// Cloud im Hintergrund laden
-syncFromCloud();
-
-// Echtzeit-Lauschen auf Änderungen von anderen Geräten
-if(supabase){
-  try {
-    supabase.channel('public:daily_status')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_status' }, payload => {
-        syncFromCloud();
-      })
-      .subscribe();
-  } catch(e) {}
-}
-
-// Offline-Modus & Icon Generator
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});
-}
-(function(){
-  const img=new Image();
-  img.onload=()=>{try{
-    const c=document.createElement('canvas');c.width=c.height=180;
-    c.getContext('2d').drawImage(img,0,0,180,180);
-    const l=document.createElement('link');
-    l.rel='apple-touch-icon';l.href=c.toDataURL('image/png');
-    document.head.appendChild(l);
-  }catch(e){}};
-  img.src='icon.svg';
-})();
 </script>
 </body>
 </html>
