@@ -10,8 +10,8 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <meta name="theme-color" content="#ff9800">
-<!-- Supabase SDK laden -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Supabase SDK mit Fehlerbehandlung laden -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="console.warn('Supabase CDN konnte nicht geladen werden, App läuft im Offline-Modus.')"></script>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;font-family:-apple-system,system-ui,Roboto,sans-serif;user-select:none;-webkit-user-select:none;touch-action:manipulation}
@@ -42,7 +42,7 @@ button{font-family:inherit;border:0;padding:0;cursor:pointer}
 @keyframes pop{0%{transform:scale(1)}50%{transform:scale(1.6) rotate(-10deg)}100%{transform:scale(1.15)}}
 .chk{position:absolute;top:2px;right:10px;font-size:34px;color:#fff}
 .fly{position:fixed;left:50%;top:50%;font-size:44px;pointer-events:none;z-index:50;animation:fly 1.3s ease-out forwards}
-@keyframes fly{from{transform:translate(-50%,-50%);opacity:1}to{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy)));opacity:0}}
+@keyframes fly{from{transform:translate(-50%,-50%);opacity:1}to{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy));opacity:0}}
 .bar{display:flex;align-items:center;gap:14px}
 h1{font-size:24px;margin:0}h2{font-size:22px;margin:0}
 .sec{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:26px 0 10px;flex-wrap:wrap}
@@ -70,15 +70,17 @@ h1{font-size:24px;margin:0}h2{font-size:22px;margin:0}
 <div id="app"></div>
 <div id="fx"></div>
 <script>
-// ---------- Supabase Verbindung ----------
 const SUPABASE_URL = 'https://ggnkegcsmfikuxjyddcy.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_xoUpfy-H8iqX1uDPYVL7PQ_zRvd8J0f';
 let supabase = null;
+
 try {
-  if(window.supabase) {
+  if (window.supabase && typeof window.supabase.createClient === 'function') {
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   }
-} catch(e) {}
+} catch(e) {
+  console.error('Supabase Init Fehler:', e);
+}
 
 const AVATARS=['🐶','🐱','🐰','🦊','🐼','🦁','🐸','🐵','🦄','🐯'];
 const ICONS=['🚽','👕','🪥','🍎','🎒','🚰','👟','📦','🛏️','🦷','📖','🧸','🧼','🍽️','🥣','🥛','🧦','🧥','🚿','🛁','🧹','🗑️','🎨','🌱','🐕'];
@@ -151,7 +153,7 @@ async function syncFromCloud(){
     saveLocal();
     render();
   } catch(e) {
-    console.error('Cloud-Sync im Hintergrund fehlgeschlagen', e);
+    console.error('Cloud-Sync Fehler:', e);
   }
 }
 
@@ -436,7 +438,7 @@ async function act(a,v){
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){syncFromCloud();render();}});
 setInterval(()=>{if(S.day!==today())render();},60000);
 
-// Sofort rendern (ohne Verzögerung)
+// Direkt beim Start rendern, damit der Bildschirm sofort da ist
 render();
 
 // Cloud im Hintergrund laden
@@ -444,11 +446,13 @@ syncFromCloud();
 
 // Echtzeit-Lauschen auf Änderungen von anderen Geräten
 if(supabase){
-  supabase.channel('public:daily_status')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_status' }, payload => {
-      syncFromCloud();
-    })
-    .subscribe();
+  try {
+    supabase.channel('public:daily_status')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_status' }, payload => {
+        syncFromCloud();
+      })
+      .subscribe();
+  } catch(e) {}
 }
 
 // Offline-Modus & Icon Generator
