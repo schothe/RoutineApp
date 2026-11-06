@@ -7,6 +7,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Routine">
 <title>Meine Routine</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#ff9800">
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;font-family:-apple-system,system-ui,Roboto,sans-serif;user-select:none;-webkit-user-select:none;touch-action:manipulation}
@@ -361,6 +364,23 @@ function act(a,v){
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)render();});
 setInterval(()=>{if(S.day!==today())render();},60000);
 render();
+
+// Offline-Modus
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});
+}
+// App-Icon für den Home-Bildschirm (iOS braucht PNG, das wird hier erzeugt)
+(function(){
+  const img=new Image();
+  img.onload=()=>{try{
+    const c=document.createElement('canvas');c.width=c.height=180;
+    c.getContext('2d').drawImage(img,0,0,180,180);
+    const l=document.createElement('link');
+    l.rel='apple-touch-icon';l.href=c.toDataURL('image/png');
+    document.head.appendChild(l);
+  }catch(e){}};
+  img.src='icon.svg';
+})();
 </script>
 </body>
 </html>
