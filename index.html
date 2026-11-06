@@ -42,7 +42,7 @@ button{font-family:inherit;border:0;padding:0;cursor:pointer}
 @keyframes pop{0%{transform:scale(1)}50%{transform:scale(1.6) rotate(-10deg)}100%{transform:scale(1.15)}}
 .chk{position:absolute;top:2px;right:10px;font-size:34px;color:#fff}
 .fly{position:fixed;left:50%;top:50%;font-size:44px;pointer-events:none;z-index:50;animation:fly 1.3s ease-out forwards}
-@keyframes fly{from{transform:translate(-50%,-50%);opacity:1}to{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy));opacity:0}}
+@keyframes fly{from{transform:translate(-50%,-50%);opacity:1}to{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy)));opacity:0}}
 .bar{display:flex;align-items:center;gap:14px}
 h1{font-size:24px;margin:0}h2{font-size:22px;margin:0}
 .sec{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:26px 0 10px;flex-wrap:wrap}
@@ -111,10 +111,9 @@ function defaults(){
   };
 }
 
-function today(){const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();.replace()}
+function today(){const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
 function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
-// 1. Sofortiges Laden aus dem lokalen Speicher für blitzschnellen Start
 function loadLocal(){
   let s=null;
   try{s=JSON.parse(localStorage.getItem('routine'));}catch(e){}
@@ -131,7 +130,6 @@ function loadLocal(){
 let S = loadLocal();
 function saveLocal(){try{localStorage.setItem('routine',JSON.stringify(S));}catch(e){}}
 
-// 2. Im Hintergrund Daten von Supabase laden und abgleichen
 async function syncFromCloud(){
   if(!supabase) return;
   try {
@@ -248,13 +246,13 @@ function homeHTML(){
   return `<div class="screen home"><button class="lock" data-act="gate">🔒</button><div class="grid">`+
     S.kids.map((k,i)=>{
       const p=weekPerfect(k);
-      return `<button class="kid" style="background:${COLORS[i\%6]}" data-act="kid" data-id="${k.id}"><span class="av">${k.avatar}</span><span class="nm">${esc(k.name)}</span><span class="wk">${p>=S.goal?'🏆':'⭐ '+p+'/'+S.goal}</span></button>`;
+      return `<button class="kid" style="background:${COLORS[i%6]}" data-act="kid" data-id="${k.id}"><span class="av">${k.avatar}</span><span class="nm">${esc(k.name)}</span><span class="wk">${p>=S.goal?'🏆':'⭐ '+p+'/'+S.goal}</span></button>`;
     }).join('')+
     `</div></div>`;
 }
 function tileHTML(k,c){
   const d=S.done.includes(key(k,c));
-  return `<button class="tile ${d?'done':''}${justDone===c.id?'pop':''}" style="--c:${COLORS[c.color\%6]}" data-act="tile" data-id="${c.id}"><span class="ic">${c.icon}</span>${d?'<span class="chk">✔</span>':''}</button>`;
+  return `<button class="tile ${d?'done':''} ${justDone===c.id?'pop':''}" style="--c:${COLORS[c.color%6]}" data-act="tile" data-id="${c.id}"><span class="ic">${c.icon}</span>${d?'<span class="chk">✔</span>':''}</button>`;
 }
 function dayHTML(){
   const k=S.kids.find(x=>x.id===view.kid);
@@ -262,7 +260,7 @@ function dayHTML(){
   const cs=cardsFor(k),n=cs.filter(c=>S.done.includes(key(k,c))).length,all=cs.length>0&&n===cs.length;
   const ws=weekStatus(k),dts=weekDates(),perfect=ws.filter(s=>s==='perfect').length,t=ymd(new Date());
   const sym={perfect:'⭐',part:'🔸',none:'○',off:'–',future:''};
-  const week=`<div class="week">`+ws.map((s,i)=>`<div class="wd ${ymd(dts[i])===t?'today':''}"><small>${DN[(i+1)\%7]}</small><span>${sym[s]}</span></div>`).join('')+
+  const week=`<div class="week">`+ws.map((s,i)=>`<div class="wd ${ymd(dts[i])===t?'today':''}"><small>${DN[(i+1)%7]}</small><span>${sym[s]}</span></div>`).join('')+
     `<div class="trophy">${perfect>=S.goal?'🏆':'⭐ '+perfect+'/'+S.goal}</div></div>`;
   let body='';
   for(let p=0;p<3;p++){
@@ -270,4 +268,204 @@ function dayHTML(){
     body+=`<div class="part">${PARTS[p]}</div><div class="grid left">${l.map(c=>tileHTML(k,c)).join('')}</div>`;
   }
   if(!cs.length)body='<p style="font-size:60px;text-align:center;margin-top:60px">😴</p>';
-  return `<div class="screen day ${all?'win':''}"><div class="top"><button class="homebtn" data-act="home">🏠</button><span class="avs">${k.avatar}</span><span class="stars">${all?'🎉🏆🎉':'⭐'.repeat(n)}</span></div>${week}${body}
+  return `<div class="screen day ${all?'win':''}"><div class="top"><button class="homebtn" data-act="home">🏠</button><span class="avs">${k.avatar}</span><span class="stars">${all?'🎉🏆🎉':'⭐'.repeat(n)}</span></div>${week}${body}</div>`;
+}
+function parentHTML(){
+  return `<div class="screen parent"><div class="bar"><button class="btn" data-act="home">← Zurück</button><h1>Eltern-Bereich 🛠️</h1></div>
+  <div class="sec"><h2>Kinder</h2><button class="btn pri" data-act="newKid">＋ Neu</button></div>`+
+  S.kids.map(k=>`<div class="row"><div class="rowmain" data-act="editKid" data-id="${k.id}"><span class="big">${k.avatar}</span><b>${esc(k.name)}</b><small>${k.age} Jahre</small></div><button class="del" data-act="delKid" data-id="${k.id}">🗑️</button></div>`).join('')+
+  `<div class="sec"><h2>Karten</h2><button class="btn pri" data-act="newCard">＋ Neu</button></div>`+
+  S.cards.map(c=>`<div class="row"><div class="rowmain" data-act="editCard" data-id="${c.id}"><span class="big">${c.icon}</span><b>${esc(c.name)}</b><small>${PARTS[c.part]} ${who(c)}${c.ages.length?' · '+c.ages.join('/')+' J.':''}${c.days.length?'<br>'+daysText(c.days):''}</small></div><button class="del" data-act="delCard" data-id="${c.id}">🗑️</button></div>`).join('')+
+  `<div class="sec"><h2>Wochen-Belohnung 🏆</h2></div>
+  <div class="row"><div class="rowmain" style="flex-wrap:wrap">Pokal ab <span class="pick">${[3,4,5,6,7].map(n=>`<button class="pill ${S.goal===n?'sel':''}" data-act="setGoal" data-v="${n}">${n}</button>`).join('')}</span> perfekten Tagen pro Woche</div></div>
+  <p style="color:#777;font-size:14px">Ein perfekter Tag heißt: Alle Karten des Tages sind abgehakt.</p>
+  <div class="sec"><button class="btn" data-act="reset">🔄 Heute zurücksetzen</button><button class="btn" data-act="toggleSpeak">🔊 Sprachausgabe: ${S.speak?'an':'aus'}</button></div></div>`;
+}
+function pickHTML(list,sel,act){
+  return `<div class="pick">`+list.map(v=>`<button class="chip ${v===sel?'sel':''}" data-act="${act}" data-v="${v}">${v}</button>`).join('')+`</div>`;
+}
+function modalHTML(){
+  const m=modal;
+  if(m.type==='gate'){
+    return `<div class="modal"><div class="box"><h2>Nur für Eltern 🔒</h2><p style="font-size:22px">Was ist ${m.a} + ${m.b} ?</p>
+    <input id="gin" type="number" inputmode="numeric" autofocus><div class="err">${m.wrong?'Falsch, versuch es nochmal.':''}</div>
+    <div class="acts"><button class="btn" data-act="mcancel">Abbrechen</button><button class="btn pri" data-act="gok">OK</button></div></div></div>`;
+  }
+  const d=m.d;
+  if(m.type==='kid'){
+    return `<div class="modal"><div class="box"><h2>${d.id?'Kind bearbeiten':'Neues Kind'}</h2>
+    <input id="nm" type="text" placeholder="Name" value="${esc(d.name)}">
+    <div class="lbl">Tier</div>${pickHTML(AVATARS,d.avatar,'pickAv')}
+    <div class="lbl">Alter</div><div class="pick">${[3,4,5,6].map(a=>`<button class="pill ${d.age===a?'sel':''}" data-act="pickAge" data-v="${a}">${a} Jahre</button>`).join('')}</div>
+    <div class="acts"><button class="btn" data-act="mcancel">Abbrechen</button><button class="btn pri" data-act="msave">Speichern</button></div></div></div>`;
+  }
+  return `<div class="modal"><div class="box"><h2>${d.id?'Karte bearbeiten':'Neue Karte'}</h2>
+  <input id="nm" type="text" placeholder="Name" value="${esc(d.name)}">
+  <div class="lbl">Symbol</div>${pickHTML(ICONS,d.icon,'pickIc')}
+  <input id="cu" type="text" placeholder="Eigenes Emoji (optional)" value="${esc(m.cu||'')}" style="margin-top:10px">
+  <div class="lbl">Tageszeit</div><div class="pick">${PARTS.map((p,i)=>`<button class="chip ${d.part===i?'sel':''}" data-act="pickPart" data-v="${i}">${p}</button>`).join('')}</div>
+  <div class="lbl">Für wen?</div><div class="pick"><button class="pill ${!d.kid?'sel':''}" data-act="pickWho" data-v="">Alle</button>${S.kids.map(k=>`<button class="pill ${d.kid===k.id?'sel':''}" data-act="pickWho" data-v="${k.id}">${k.avatar} ${esc(k.name)}</button>`).join('')}</div>
+  <div class="lbl">Alter (nichts gewählt = alle)</div><div class="pick">${[3,4,5,6].map(a=>`<button class="pill ${d.ages.includes(a)?'sel':''}" data-act="toggleAge" data-v="${a}">${a}</button>`).join('')}</div>
+  <div class="lbl">Wochentage (nichts gewählt = täglich)</div><div class="pick">${ORDER.map(w=>`<button class="pill ${d.days.includes(w)?'sel':''}" data-act="toggleDay" data-v="${w}">${DN[w]}</button>`).join('')}</div>
+  <div class="acts"><button class="btn" data-act="mcancel">Abbrechen</button><button class="btn pri" data-act="msave">Speichern</button></div></div></div>`;
+}
+function render(){
+  checkDay();
+  $app.innerHTML=(view.name==='home'?homeHTML():view.name==='day'?dayHTML():parentHTML())+(modal?modalHTML():'');
+}
+function syncModal(){
+  if(!modal||!modal.d)return;
+  const n=document.getElementById('nm');if(n)modal.d.name=n.value;
+  const c=document.getElementById('cu');if(c)modal.cu=c.value;
+}
+
+// ---------- Aktionen ----------
+$app.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act]');if(!t)return;
+  act(t.dataset.act,t.dataset.v!==undefined?t.dataset.v:t.dataset.id);
+});
+function toggle(arr,n){const i=arr.indexOf(n);if(i>=0)arr.splice(i,1);else{arr.push(n);arr.sort();}}
+
+async function act(a,v){
+  syncModal();
+  switch(a){
+    case 'kid':view={name:'day',kid:v};break;
+    case 'home':view={name:'home'};break;
+    case 'gate':modal={type:'gate',a:3+Math.floor(Math.random()*7),b:3+Math.floor(Math.random()*7)};break;
+    case 'gok':{
+      const val=parseInt(document.getElementById('gin').value,10);
+      if(val===modal.a+modal.b){modal=null;view={name:'parent'};}else modal.wrong=true;
+      break;
+    }
+    case 'mcancel':modal=null;break;
+    case 'tile':{
+      const k=S.kids.find(x=>x.id===view.kid),c=S.cards.find(x=>x.id===v);
+      const kk=key(k,c);if(S.done.includes(kk))return;
+      S.done.push(kk);
+      saveLocal();
+
+      if(supabase){
+        supabase.from('daily_status').upsert({
+          id: ymd(new Date()) + '_' + k.id + '_' + c.id,
+          date: ymd(new Date()),
+          kid_id: k.id,
+          task_id: c.id,
+          done: true
+        }).then();
+      }
+
+      const cs=cardsFor(k),nn=cs.filter(x=>S.done.includes(key(k,x))).length,all=nn===cs.length;
+      justDone=v;chime();buzz();
+      const wp=weekPerfect(k);
+      render();burst(all?70:24);
+      if(all&&wp===S.goal){
+        setTimeout(()=>burst(90),500);
+        say('Wochenpokal geschafft, '+k.name+'! Hurra!');
+      }else say(all?'Toll gemacht, '+k.name+'! Alles geschafft!':'Super!');
+      setTimeout(()=>{justDone=null;},700);
+      return;
+    }
+    case 'newKid':modal={type:'kid',d:{id:null,name:'',age:3,avatar:'🦁'}};break;
+    case 'editKid':modal={type:'kid',d:{...S.kids.find(x=>x.id===v)}};break;
+    case 'newCard':modal={type:'card',cu:'',d:{id:null,name:'',icon:'⭐',part:0,kid:null,ages:[],days:[],color:Math.floor(Math.random()*6)}};break;
+    case 'editCard':{const c=S.cards.find(x=>x.id===v);modal={type:'card',cu:'',d:{...c,ages:[...c.ages],days:[...c.days]}};break;}
+    case 'pickAv':modal.d.avatar=v;break;
+    case 'pickAge':modal.d.age=+v;break;
+    case 'pickIc':modal.d.icon=v;modal.cu='';break;
+    case 'pickPart':modal.d.part=+v;break;
+    case 'pickWho':modal.d.kid=v||null;break;
+    case 'toggleAge':toggle(modal.d.ages,+v);break;
+    case 'toggleDay':toggle(modal.d.days,+v);break;
+    case 'msave':{
+      const d=modal.d;
+      if(modal.type==='kid'){
+        d.name=d.name.trim()||'Kind';
+        if(d.id){S.kids[S.kids.findIndex(x=>x.id===d.id)]=d;}else{d.id=uid();S.kids.push(d);}
+        if(supabase) supabase.from('kids').upsert(d).then();
+      }else{
+        d.name=d.name.trim()||'Aufgabe';
+        if((modal.cu||'').trim())d.icon=modal.cu.trim();
+        if(d.id){S.cards[S.cards.findIndex(x=>x.id===d.id)]=d;}else{d.id=uid();S.cards.push(d);}
+        if(supabase) supabase.from('tasks').upsert(d).then();
+      }
+      saveLocal();modal=null;break;
+    }
+    case 'delKid':{
+      const k=S.kids.find(x=>x.id===v);
+      if(confirm((k?k.name:'Kind')+' löschen?')){
+        S.kids=S.kids.filter(x=>x.id!==v);
+        S.cards=S.cards.filter(c=>c.kid!==v);
+        S.done=S.done.filter(x=>!x.startsWith(v+'|'));
+        saveLocal();
+        if(supabase){
+          supabase.from('kids').delete().eq('id', v).then();
+          supabase.from('tasks').delete().eq('kid', v).then();
+        }
+      }
+      break;
+    }
+    case 'delCard':{
+      const c=S.cards.find(x=>x.id===v);
+      if(confirm('„'+(c?c.name:'Karte')+'“ löschen?')){
+        S.cards=S.cards.filter(x=>x.id!==v);
+        S.done=S.done.filter(x=>!x.endsWith('|'+v));
+        saveLocal();
+        if(supabase) supabase.from('tasks').delete().eq('id', v).then();
+      }
+      break;
+    }
+    case 'reset':
+      if(confirm('Heute alles zurücksetzen?')){
+        S.done=[];delete S.hist[ymd(new Date())];
+        saveLocal();
+        if(supabase){
+          for(let k of S.kids) {
+            for(let c of cardsFor(k)) {
+              supabase.from('daily_status').delete().eq('date', today()).eq('kid_id', k.id).eq('task_id', c.id).then();
+            }
+          }
+        }
+      }
+      break;
+    case 'toggleSpeak':S.speak=!S.speak;saveLocal();break;
+    case 'setGoal':S.goal=+v;saveLocal();break;
+  }
+  render();
+}
+
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){syncFromCloud();render();}});
+setInterval(()=>{if(S.day!==today())render();},60000);
+
+// Sofort rendern (ohne Verzögerung)
+render();
+
+// Cloud im Hintergrund laden
+syncFromCloud();
+
+// Echtzeit-Lauschen auf Änderungen von anderen Geräten
+if(supabase){
+  supabase.channel('public:daily_status')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_status' }, payload => {
+      syncFromCloud();
+    })
+    .subscribe();
+}
+
+// Offline-Modus & Icon Generator
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});
+}
+(function(){
+  const img=new Image();
+  img.onload=()=>{try{
+    const c=document.createElement('canvas');c.width=c.height=180;
+    c.getContext('2d').drawImage(img,0,0,180,180);
+    const l=document.createElement('link');
+    l.rel='apple-touch-icon';l.href=c.toDataURL('image/png');
+    document.head.appendChild(l);
+  }catch(e){}};
+  img.src='icon.svg';
+})();
+</script>
+</body>
+</html>
