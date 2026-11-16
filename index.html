@@ -92,4 +92,356 @@ function defaults(){
       {id:'k3',name:'Kind 3',age:3,avatar:'🦁'}
     ],
     cards:[
-      {id:'c1',name:'Pipi machen',icon:'🚽',part:0,k
+      {id:'c1',name:'Pipi machen',icon:'🚽',part:0,kid:null,ages:[],days:[],color:0},
+      {id:'c2',name:'Anziehen',icon:'👕',part:0,kid:null,ages:[],days:[],color:1},
+      {id:'c3',name:'Zähne putzen',icon:'🪥',part:0,kid:null,ages:[],days:[],color:2},
+      {id:'c4',name:'Frühstücken',icon:'🍎',part:0,kid:null,ages:[],days:[],color:3},
+      {id:'c5',name:'Kita-Tasche packen',icon:'🎒',part:0,kid:null,ages:[6],days:[1,2,3,4,5],color:4},
+      {id:'c6',name:'Hände waschen',icon:'🚰',part:1,kid:null,ages:[],days:[],color:5},
+      {id:'c7',name:'Schuhe & Jacke aufräumen',icon:'👟',part:1,kid:null,ages:[],days:[],color:0},
+      {id:'c8',name:'Spielzeug aufräumen',icon:'📦',part:1,kid:null,ages:[],days:[],color:1},
+      {id:'c9',name:'Schlafanzug anziehen',icon:'🛏️',part:2,kid:null,ages:[],days:[],color:2},
+      {id:'c10',name:'Zähne putzen',icon:'🦷',part:2,kid:null,ages:[],days:[],color:3},
+      {id:'c11',name:'Gute-Nacht-Geschichte',icon:'📖',part:2,kid:null,ages:[],days:[],color:4}
+    ],
+    done:[],day:today(),speak:true,goal:5,hist:{},t1:11,t2:17,force:null
+  };
+}
+function today(){const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
+function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function load(){
+  let s=null;
+  try{s=JSON.parse(localStorage.getItem('routine'));}catch(e){}
+  if(!(s&&s.kids&&s.cards))s=defaults();
+  s.cards.forEach(c=>{if(!c.ages)c.ages=[];if(!c.days)c.days=[];});
+  if(!s.hist)s.hist={};
+  if(!s.goal)s.goal=5;
+  if(s.speak===undefined)s.speak=true;
+  if(!s.done)s.done=[];
+  if(!s.day)s.day=today();
+  if(!s.t1)s.t1=11;
+  if(!s.t2)s.t2=17;
+  if(s.force===undefined)s.force=null;
+  return s;
+}
+let S=load();
+function save(){try{localStorage.setItem('routine',JSON.stringify(S));}catch(e){}}
+function checkDay(){
+  if(S.day!==today()){
+    S.day=today();S.done=[];S.force=null;
+    const cut=ymd(new Date(Date.now()-70*864e5));
+    Object.keys(S.hist).forEach(k=>{if(k<cut)delete S.hist[k];});
+    save();
+  }
+}
+const uid=()=>Math.random().toString(36).slice(2,9);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const key=(k,c)=>k.id+'|'+c.id;
+function cardsFor(k){
+  const wd=new Date().getDay();
+  return S.cards.filter(c=>(!c.kid||c.kid===k.id)&&(!c.ages.length||c.ages.includes(k.age))&&(!c.days.length||c.days.includes(wd)));
+}
+// Aktuelle Tageszeit: 0 = Morgen, 1 = Mittag/Nachmittag, 2 = Abend
+function curPart(){
+  if(S.force!==null&&S.force!==undefined)return S.force;
+  const h=new Date().getHours();
+  return h<S.t1?0:h<S.t2?1:2;
+}
+function who(c){if(!c.kid)return 'Alle';const k=S.kids.find(x=>x.id===c.kid);return k?k.avatar:'?';}
+function daysText(days){
+  if(!days.length)return '';
+  const n=ORDER.filter(d=>days.includes(d));
+  const s=n.join();
+  if(s==='1,2,3,4,5')return 'Mo–Fr';
+  if(s==='6,0')return 'Sa/So';
+  return n.map(d=>DN[d]).join('/');
+}
+function move(id,dir){
+  const i=S.cards.findIndex(x=>x.id===id);if(i<0)return;
+  const p=S.cards[i].part;
+  const idx=S.cards.map((x,j)=>x.part===p?j:-1).filter(j=>j>=0);
+  const pos=idx.indexOf(i),t=pos+dir;
+  if(t<0||t>=idx.length)return;
+  const tmp=S.cards[i];S.cards[i]=S.cards[idx[t]];S.cards[idx[t]]=tmp;
+  save();
+}
+
+// ---------- Wochen-Belohnung ----------
+function weekDates(){
+  const d=new Date(),off=(d.getDay()+6)%7;
+  const m=new Date(d.getFullYear(),d.getMonth(),d.getDate()-off);
+  return [0,1,2,3,4,5,6].map(i=>new Date(m.getFullYear(),m.getMonth(),m.getDate()+i));
+}
+function weekStatus(k){
+  const t=ymd(new Date());
+  return weekDates().map(dt=>{
+    const y=ymd(dt);
+    if(y>t)return 'future';
+    if(y===t){
+      const cs=cardsFor(k),n=cs.filter(c=>S.done.includes(key(k,c))).length;
+      if(!cs.length)return 'off';
+      return n===cs.length?'perfect':n>0?'part':'none';
+    }
+    const h=(S.hist[y]||{})[k.id];
+    return h?(h.all?'perfect':h.n>0?'part':'none'):'none';
+  });
+}
+const weekPerfect=k=>weekStatus(k).filter(s=>s==='perfect').length;
+
+let view={name:'home'},modal=null,justDone=null,justLocked=null,lastPart=null;
+const $app=document.getElementById('app');
+
+// ---------- Ton, Sprache, Vibration, Sterne ----------
+let ac;
+function chime(){
+  try{
+    ac=ac||new (window.AudioContext||window.webkitAudioContext)();
+    if(ac.state==='suspended')ac.resume();
+    [660,880,1100].forEach((f,i)=>{
+      const o=ac.createOscillator(),g=ac.createGain();
+      o.type='sine';o.frequency.value=f;o.connect(g);g.connect(ac.destination);
+      const t=ac.currentTime+i*0.1;
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.25,t+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.25);
+      o.start(t);o.stop(t+0.3);
+    });
+  }catch(e){}
+}
+function say(text){
+  if(!S.speak||!window.speechSynthesis)return;
+  try{const u=new SpeechSynthesisUtterance(text);u.lang='de-DE';u.rate=0.95;u.pitch=1.2;speechSynthesis.cancel();speechSynthesis.speak(u);}catch(e){}
+}
+function buzz(){if(navigator.vibrate)navigator.vibrate(40);}
+function burst(n){
+  const fx=document.getElementById('fx'),E=['⭐','🌟','✨','🎉','🏆'];
+  const maxd=Math.min(innerWidth,innerHeight)/2;
+  for(let i=0;i<n;i++){
+    const s=document.createElement('span');s.className='fly';
+    s.textContent=E[Math.floor(Math.random()*(n>60?5:4))];
+    const a=Math.random()*Math.PI*2,d=100+Math.random()*maxd;
+    s.style.setProperty('--dx',Math.cos(a)*d+'px');
+    s.style.setProperty('--dy',(Math.sin(a)*d+60)+'px');
+    fx.appendChild(s);setTimeout(()=>s.remove(),1400);
+  }
+}
+
+// ---------- Ansichten ----------
+function homeHTML(){
+  return `<div class="screen home"><button class="lock" data-act="gate">🔒</button><div class="grid">`+
+    S.kids.map((k,i)=>{
+      const p=weekPerfect(k);
+      return `<button class="kid" style="background:${COLORS[i%6]}" data-act="kid" data-id="${k.id}"><span class="av">${k.avatar}</span><span class="nm">${esc(k.name)}</span><span class="wk">${p>=S.goal?'🏆':'⭐ '+p+'/'+S.goal}</span></button>`;
+    }).join('')+
+    `</div></div>`;
+}
+function tileHTML(k,c,nextC){
+  const d=S.done.includes(key(k,c));
+  const state=d?'done':(nextC&&nextC.id===c.id)?'active':'locked';
+  return `<button class="tile ${state} ${justDone===c.id?'pop':''} ${justLocked===c.id?'shake':''}" style="--c:${COLORS[c.color%6]}" data-act="tile" data-id="${c.id}"><span class="ic">${c.icon}</span>${d?'<span class="chk">✔</span>':''}</button>`;
+}
+function dayHTML(){
+  const k=S.kids.find(x=>x.id===view.kid);
+  if(!k){view={name:'home'};return homeHTML();}
+  const cs=cardsFor(k),n=cs.filter(c=>S.done.includes(key(k,c))).length,all=cs.length>0&&n===cs.length;
+  const cp=curPart(),cur=cs.filter(c=>c.part===cp);
+  const nextC=cur.find(c=>!S.done.includes(key(k,c)));
+  const partAll=cur.length>0&&!nextC;
+  const ws=weekStatus(k),dts=weekDates(),perfect=ws.filter(s=>s==='perfect').length,t=ymd(new Date());
+  const sym={perfect:'⭐',part:'🔸',none:'○',off:'–',future:''};
+  const week=`<div class="week">`+ws.map((s,i)=>`<div class="wd ${ymd(dts[i])===t?'today':''}"><small>${DN[(i+1)%7]}</small><span>${sym[s]}</span></div>`).join('')+
+    `<div class="trophy">${perfect>=S.goal?'🏆':'⭐ '+perfect+'/'+S.goal}</div></div>`;
+  let body=`<div class="part">${PARTS[cp]}</div>`;
+  if(cur.length)body+=`<div class="grid left">${cur.map(c=>tileHTML(k,c,nextC)).join('')}</div>`;
+  else body+='<p style="font-size:60px;text-align:center;margin-top:30px">😴</p>';
+  return `<div class="screen day ${all?'win':''}"><div class="top"><button class="homebtn" data-act="home">🏠</button><span class="avs">${k.avatar}</span><span class="stars">${all?'🎉🏆🎉':(partAll?'🎉 ':'')+'⭐'.repeat(n)}</span></div>${week}${body}</div>`;
+}
+function cardRow(c,i,len){
+  return `<div class="row"><div class="mvs"><button class="mv" data-act="up" data-id="${c.id}" ${i===0?'disabled':''}>▲</button><button class="mv" data-act="down" data-id="${c.id}" ${i===len-1?'disabled':''}>▼</button></div><div class="rowmain" data-act="editCard" data-id="${c.id}"><span class="big">${c.icon}</span><b>${esc(c.name)}</b><small>${who(c)}${c.ages.length?' · '+c.ages.join('/')+' J.':''}${c.days.length?'<br>'+daysText(c.days):''}</small></div><button class="del" data-act="delCard" data-id="${c.id}">🗑️</button></div>`;
+}
+function parentHTML(){
+  const cardsHTML=[0,1,2].map(p=>{
+    const l=S.cards.filter(c=>c.part===p);
+    if(!l.length)return '';
+    return `<div class="grp">${PARTS[p]}</div>`+l.map((c,i)=>cardRow(c,i,l.length)).join('');
+  }).join('');
+  return `<div class="screen parent"><div class="bar"><button class="btn" data-act="home">← Zurück</button><h1>Eltern-Bereich 🛠️</h1></div>
+  <div class="sec"><h2>Kinder</h2><button class="btn pri" data-act="newKid">＋ Neu</button></div>`+
+  S.kids.map(k=>`<div class="row"><div class="rowmain" data-act="editKid" data-id="${k.id}"><span class="big">${k.avatar}</span><b>${esc(k.name)}</b><small>${k.age} Jahre</small></div><button class="del" data-act="delKid" data-id="${k.id}">🗑️</button></div>`).join('')+
+  `<div class="sec"><h2>Karten</h2><button class="btn pri" data-act="newCard">＋ Neu</button></div>
+  <p style="color:#777;font-size:14px;margin:0 0 6px">Die Kinder arbeiten die Karten einer Tageszeit von oben nach unten ab. Mit ▲ ▼ änderst du die Reihenfolge.</p>`+
+  cardsHTML+
+  `<div class="sec"><h2>Tageszeit ⏰</h2></div>
+  <div class="row"><div class="rowmain" style="flex-wrap:wrap">☀️ ab <span class="pick">${[10,11,12,13,14].map(h=>`<button class="pill ${S.t1===h?'sel':''}" data-act="setT1" data-v="${h}">${h}</button>`).join('')}</span> Uhr</div></div>
+  <div class="row"><div class="rowmain" style="flex-wrap:wrap">🌙 ab <span class="pick">${[16,17,18,19,20].map(h=>`<button class="pill ${S.t2===h?'sel':''}" data-act="setT2" data-v="${h}">${h}</button>`).join('')}</span> Uhr</div></div>
+  <div class="row"><div class="rowmain" style="flex-wrap:wrap">Jetzt zeigen: <span class="pick"><button class="pill ${S.force===null?'sel':''}" data-act="setForce" data-v="a">Auto</button>${PARTS.map((p,i)=>`<button class="pill ${S.force===i?'sel':''}" data-act="setForce" data-v="${i}">${p}</button>`).join('')}</span></div></div>
+  <p style="color:#777;font-size:14px;margin:0">Vor der ☀️-Zeit sehen die Kinder nur 🌅, danach ☀️, ab der 🌙-Zeit nur 🌙. „Jetzt zeigen" überschreibt das bis Mitternacht.</p>
+  <div class="sec"><h2>Wochen-Belohnung 🏆</h2></div>
+  <div class="row"><div class="rowmain" style="flex-wrap:wrap">Pokal ab <span class="pick">${[3,4,5,6,7].map(n=>`<button class="pill ${S.goal===n?'sel':''}" data-act="setGoal" data-v="${n}">${n}</button>`).join('')}</span> perfekten Tagen pro Woche</div></div>
+  <p style="color:#777;font-size:14px">Ein perfekter Tag heißt: Alle Karten des Tages sind abgehakt.</p>
+  <div class="sec"><button class="btn" data-act="reset">🔄 Heute zurücksetzen</button><button class="btn" data-act="toggleSpeak">🔊 Sprachausgabe: ${S.speak?'an':'aus'}</button></div></div>`;
+}
+function pickHTML(list,sel,act){
+  return `<div class="pick">`+list.map(v=>`<button class="chip ${v===sel?'sel':''}" data-act="${act}" data-v="${v}">${v}</button>`).join('')+`</div>`;
+}
+function modalHTML(){
+  const m=modal;
+  if(m.type==='gate'){
+    return `<div class="modal"><div class="box"><h2>Nur für Eltern 🔒</h2><p style="font-size:22px">Was ist ${m.a} + ${m.b} ?</p>
+    <input id="gin" type="number" inputmode="numeric" autofocus><div class="err">${m.wrong?'Falsch, versuch es nochmal.':''}</div>
+    <div class="acts"><button class="btn" data-act="mcancel">Abbrechen</button><button class="btn pri" data-act="gok">OK</button></div></div></div>`;
+  }
+  const d=m.d;
+  if(m.type==='kid'){
+    return `<div class="modal"><div class="box"><h2>${d.id?'Kind bearbeiten':'Neues Kind'}</h2>
+    <input id="nm" type="text" placeholder="Name" value="${esc(d.name)}">
+    <div class="lbl">Tier</div>${pickHTML(AVATARS,d.avatar,'pickAv')}
+    <div class="lbl">Alter</div><div class="pick">${[3,4,5,6].map(a=>`<button class="pill ${d.age===a?'sel':''}" data-act="pickAge" data-v="${a}">${a} Jahre</button>`).join('')}</div>
+    <div class="acts"><button class="btn" data-act="mcancel">Abbrechen</button><button class="btn pri" data-act="msave">Speichern</button></div></div></div>`;
+  }
+  return `<div class="modal"><div class="box"><h2>${d.id?'Karte bearbeiten':'Neue Karte'}</h2>
+  <input id="nm" type="text" placeholder="Name" value="${esc(d.name)}">
+  <div class="lbl">Symbol</div>${pickHTML(ICONS,d.icon,'pickIc')}
+  <input id="cu" type="text" placeholder="Eigenes Emoji (optional)" value="${esc(m.cu||'')}" style="margin-top:10px">
+  <div class="lbl">Tageszeit</div><div class="pick">${PARTS.map((p,i)=>`<button class="chip ${d.part===i?'sel':''}" data-act="pickPart" data-v="${i}">${p}</button>`).join('')}</div>
+  <div class="lbl">Für wen?</div><div class="pick"><button class="pill ${!d.kid?'sel':''}" data-act="pickWho" data-v="">Alle</button>${S.kids.map(k=>`<button class="pill ${d.kid===k.id?'sel':''}" data-act="pickWho" data-v="${k.id}">${k.avatar} ${esc(k.name)}</button>`).join('')}</div>
+  <div class="lbl">Alter (nichts gewählt = alle)</div><div class="pick">${[3,4,5,6].map(a=>`<button class="pill ${d.ages.includes(a)?'sel':''}" data-act="toggleAge" data-v="${a}">${a}</button>`).join('')}</div>
+  <div class="lbl">Wochentage (nichts gewählt = täglich)</div><div class="pick">${ORDER.map(w=>`<button class="pill ${d.days.includes(w)?'sel':''}" data-act="toggleDay" data-v="${w}">${DN[w]}</button>`).join('')}</div>
+  <div class="acts"><button class="btn" data-act="mcancel">Abbrechen</button><button class="btn pri" data-act="msave">Speichern</button></div></div></div>`;
+}
+function sync(){
+  if(!modal||!modal.d)return;
+  const n=document.getElementById('nm');if(n)modal.d.name=n.value;
+  const c=document.getElementById('cu');if(c)modal.cu=c.value;
+}
+function render(){
+  sync();
+  checkDay();
+  lastPart=curPart();
+  $app.innerHTML=(view.name==='home'?homeHTML():view.name==='day'?dayHTML():parentHTML())+(modal?modalHTML():'');
+}
+
+// ---------- Aktionen ----------
+$app.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act]');if(!t)return;
+  act(t.dataset.act,t.dataset.v!==undefined?t.dataset.v:t.dataset.id);
+});
+function toggle(arr,n){const i=arr.indexOf(n);if(i>=0)arr.splice(i,1);else{arr.push(n);arr.sort();}}
+function act(a,v){
+  sync();
+  switch(a){
+    case 'kid':view={name:'day',kid:v};break;
+    case 'home':view={name:'home'};break;
+    case 'gate':modal={type:'gate',a:3+Math.floor(Math.random()*7),b:3+Math.floor(Math.random()*7)};break;
+    case 'gok':{
+      const val=parseInt(document.getElementById('gin').value,10);
+      if(val===modal.a+modal.b){modal=null;view={name:'parent'};}else modal.wrong=true;
+      break;
+    }
+    case 'mcancel':modal=null;break;
+    case 'tile':{
+      const k=S.kids.find(x=>x.id===view.kid),c=S.cards.find(x=>x.id===v);
+      const kk=key(k,c);if(S.done.includes(kk))return;   // erledigt bleibt erledigt
+      const cur=cardsFor(k).filter(x=>x.part===curPart());
+      const next=cur.find(x=>!S.done.includes(key(k,x)));
+      if(!next||next.id!==c.id){                         // nur die nächste Karte ist freigeschaltet
+        justLocked=v;buzz();render();
+        setTimeout(()=>{justLocked=null;},500);
+        return;
+      }
+      S.done.push(kk);
+      const cs=cardsFor(k),nn=cs.filter(x=>S.done.includes(key(k,x))).length,all=nn===cs.length;
+      const partDone=cur.every(x=>S.done.includes(key(k,x)));
+      const y=ymd(new Date());
+      (S.hist[y]=S.hist[y]||{})[k.id]={n:nn,t:cs.length,all:all};
+      save();justDone=v;chime();buzz();
+      const wp=weekPerfect(k);
+      render();burst(all?70:partDone?45:24);
+      if(all&&wp===S.goal){
+        setTimeout(()=>burst(90),500);
+        say('Wochenpokal geschafft, '+k.name+'! Hurra!');
+      }else if(all){
+        say('Toll gemacht, '+k.name+'! Alles geschafft!');
+      }else if(partDone){
+        say('Prima gemacht, '+k.name+'!');
+      }else say('Super!');
+      setTimeout(()=>{justDone=null;},700);
+      return;
+    }
+    case 'newKid':modal={type:'kid',d:{id:null,name:'',age:3,avatar:'🦁'}};break;
+    case 'editKid':modal={type:'kid',d:{...S.kids.find(x=>x.id===v)}};break;
+    case 'newCard':modal={type:'card',cu:'',d:{id:null,name:'',icon:'⭐',part:0,kid:null,ages:[],days:[],color:Math.floor(Math.random()*6)}};break;
+    case 'editCard':{const c=S.cards.find(x=>x.id===v);modal={type:'card',cu:'',d:{...c,ages:[...c.ages],days:[...c.days]}};break;}
+    case 'pickAv':modal.d.avatar=v;break;
+    case 'pickAge':modal.d.age=+v;break;
+    case 'pickIc':modal.d.icon=v;modal.cu='';break;
+    case 'pickPart':modal.d.part=+v;break;
+    case 'pickWho':modal.d.kid=v||null;break;
+    case 'toggleAge':toggle(modal.d.ages,+v);break;
+    case 'toggleDay':toggle(modal.d.days,+v);break;
+    case 'msave':{
+      const d=modal.d;
+      if(modal.type==='kid'){
+        d.name=d.name.trim()||'Kind';
+        if(d.id){S.kids[S.kids.findIndex(x=>x.id===d.id)]=d;}else{d.id=uid();S.kids.push(d);}
+      }else{
+        d.name=d.name.trim()||'Aufgabe';
+        if((modal.cu||'').trim())d.icon=modal.cu.trim();
+        if(d.id){S.cards[S.cards.findIndex(x=>x.id===d.id)]=d;}else{d.id=uid();S.cards.push(d);}
+      }
+      save();modal=null;break;
+    }
+    case 'up':move(v,-1);break;
+    case 'down':move(v,1);break;
+    case 'delKid':{
+      const k=S.kids.find(x=>x.id===v);
+      if(confirm((k?k.name:'Kind')+' löschen?')){
+        S.kids=S.kids.filter(x=>x.id!==v);
+        S.cards=S.cards.filter(c=>c.kid!==v);
+        S.done=S.done.filter(x=>!x.startsWith(v+'|'));
+        Object.keys(S.hist).forEach(d=>{delete S.hist[d][v];});
+        save();
+      }
+      break;
+    }
+    case 'delCard':{
+      const c=S.cards.find(x=>x.id===v);
+      if(confirm('„'+(c?c.name:'Karte')+'“ löschen?')){
+        S.cards=S.cards.filter(x=>x.id!==v);
+        S.done=S.done.filter(x=>!x.endsWith('|'+v));
+        save();
+      }
+      break;
+    }
+    case 'reset':if(confirm('Heute alles zurücksetzen?')){S.done=[];delete S.hist[ymd(new Date())];save();}break;
+    case 'toggleSpeak':S.speak=!S.speak;save();break;
+    case 'setGoal':S.goal=+v;save();break;
+    case 'setT1':S.t1=+v;save();break;
+    case 'setT2':S.t2=+v;save();break;
+    case 'setForce':S.force=(v==='a')?null:+v;save();break;
+  }
+  render();
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)render();});
+setInterval(()=>{if(S.day!==today()||curPart()!==lastPart)render();},30000);
+render();
+
+// Offline-Modus
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});
+}
+// App-Icon für den Home-Bildschirm (iOS braucht PNG, das wird hier erzeugt)
+(function(){
+  const img=new Image();
+  img.onload=()=>{try{
+    const c=document.createElement('canvas');c.width=c.height=180;
+    c.getContext('2d').drawImage(img,0,0,180,180);
+    const l=document.createElement('link');
+    l.rel='apple-touch-icon';l.href=c.toDataURL('image/png');
+    document.head.appendChild(l);
+  }catch(e){}};
+  img.src='icon.svg';
+})();
+</script>
+</body>
+</html>
